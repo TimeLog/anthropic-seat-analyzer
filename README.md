@@ -43,3 +43,7 @@ DATA_DIR=/path/to/exports npm test
 ```
 
 Never commit export CSVs — they contain employee emails.
+
+## License
+
+[MIT](LICENSE)
