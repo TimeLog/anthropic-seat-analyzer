@@ -1,0 +1,9 @@
+# admin exports and pinned test expectations contain employee emails/PII — never commit
+*.csv
+data/
+expectations.json
+
+node_modules/
+.DS_Store
+*.png
+*.jpg

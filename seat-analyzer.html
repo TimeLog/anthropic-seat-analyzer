@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Seat Tier Analyzer</title>
+<style>
+  :root{
+    --bg:#0e1117; --panel:#161b24; --panel2:#1c2330; --border:#28313f; --border2:#344055;
+    --text:#dbe2ee; --dim:#8b97a8; --faint:#5c6879;
+    --blue:#4c9aff; --violet:#a78bfa; --green:#34d399; --amber:#fbbf24; --red:#f87171; --cyan:#22d3ee;
+    font-size:13px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:13px/1.45 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  h1{font-size:16px;margin:0;font-weight:650;letter-spacing:.2px}
+  h2{font-size:12px;text-transform:uppercase;letter-spacing:.8px;color:var(--dim);margin:0 0 8px;font-weight:600}
+  .wrap{max-width:1400px;margin:0 auto;padding:14px 18px 60px}
+  header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:6px 0 14px}
+  header .sub{color:var(--dim)}
+  .spacer{flex:1}
+  .mono{font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:14px}
+
+  /* drop zones */
+  .drops{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+  .drop{border:1.5px dashed var(--border2);border-radius:8px;background:var(--panel);padding:14px;cursor:pointer;
+        transition:border-color .15s, background .15s; position:relative}
+  .drop:hover,.drop.over{border-color:var(--blue);background:var(--panel2)}
+  .drop.loaded{border-style:solid;border-color:var(--green)}
+  .drop .dtitle{font-weight:650;margin-bottom:2px}
+  .drop .dmeta{color:var(--dim);font-size:12px}
+  .drop .dsource{color:var(--faint);font-size:11px;margin-top:5px}
+  .drop a{color:var(--blue);text-decoration:none}
+  .drop a:hover{text-decoration:underline}
+  .drop input[type=file]{display:none}
+  .badge-ok{color:var(--green);font-weight:650}
+
+  /* settings */
+  .settings{display:flex;gap:22px;align-items:center;flex-wrap:wrap}
+  .settings label{color:var(--dim);font-size:12px;margin-right:6px}
+  .settings input[type=date]{background:var(--panel2);border:1px solid var(--border2);color:var(--text);border-radius:5px;padding:3px 6px;font:inherit}
+  .settings input[type=range]{accent-color:var(--blue);vertical-align:middle}
+  .pill{background:var(--panel2);border:1px solid var(--border);border-radius:20px;padding:2px 10px;color:var(--dim)}
+  .pill b{color:var(--text)}
+
+  .note{background:#1d2433;border:1px solid #33405c;border-left:3px solid var(--amber);border-radius:6px;
+        padding:8px 12px;color:#c9d4e6;font-size:12px;margin-bottom:14px}
+
+  /* cards */
+  .cards{display:grid;grid-template-columns:repeat(7,1fr);gap:10px;margin-bottom:14px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px 12px}
+  .card .k{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.6px}
+  .card .v{font-size:20px;font-weight:700;margin-top:3px}
+  .card .s{color:var(--faint);font-size:11px;margin-top:2px}
+  .card.green .v{color:var(--green)} .card.amber .v{color:var(--amber)} .card.violet .v{color:var(--violet)} .card.red .v{color:var(--red)}
+
+  /* chart */
+  #chartBox svg{display:block;width:100%}
+  .legend{display:flex;gap:16px;color:var(--dim);font-size:12px;margin-top:6px;flex-wrap:wrap}
+  .legend .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+
+  /* filters */
+  .filters{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+  .filters select,.filters input[type=search]{background:var(--panel2);border:1px solid var(--border2);color:var(--text);
+    border-radius:5px;padding:4px 8px;font:inherit}
+  .filters input[type=search]{width:220px}
+  .count{color:var(--faint)}
+
+  /* table */
+  table{width:100%;border-collapse:collapse}
+  thead th{position:sticky;top:0;background:var(--panel2);color:var(--dim);text-align:left;font-size:11px;
+    text-transform:uppercase;letter-spacing:.5px;padding:7px 8px;border-bottom:1px solid var(--border2);cursor:pointer;user-select:none;white-space:nowrap}
+  thead th.num{text-align:right}
+  thead th .arr{color:var(--blue)}
+  tbody td{padding:6px 8px;border-bottom:1px solid var(--border);white-space:nowrap}
+  tbody td.num{text-align:right}
+  tbody tr.row{cursor:pointer}
+  tbody tr.row:hover{background:var(--panel2)}
+  @keyframes verdictFlash{0%{background:#4a3d12}70%{background:#4a3d12}100%{background:transparent}}
+  tbody tr.row.changed{animation:verdictFlash 1.6s ease-out}
+  .dimtxt{color:var(--dim)}
+  .tier{font-size:11px;font-weight:650;padding:1px 8px;border-radius:10px}
+  .tier.Premium{background:#3b2f63;color:#c4b5fd}
+  .tier.Standard{background:#1f3448;color:#7cc0ff}
+  .verdict{font-size:11px;font-weight:650;padding:2px 8px;border-radius:4px;white-space:nowrap}
+  .v-keep{background:#312a55;color:#c4b5fd}
+  .v-heavy{background:#3d3117;color:#fbbf24}
+  .v-down{background:#123528;color:#34d399}
+  .v-upgrade{background:#41231f;color:#fca5a5}
+  .v-okover{background:#15303f;color:#67b7f7}
+  .v-within{background:#252c38;color:#96a2b4}
+
+  /* expanded detail */
+  tr.detail>td{background:#12161f;border-bottom:1px solid var(--border2);padding:12px 16px 14px;white-space:normal}
+  .dgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px}
+  .bar{display:grid;grid-template-columns:150px 1fr 120px;gap:8px;align-items:center;margin:3px 0;font-size:12px}
+  .bar .lbl{color:var(--dim);overflow:hidden;text-overflow:ellipsis}
+  .bar .track{display:block;background:#242c3a;border-radius:3px;height:10px;overflow:hidden}
+  .bar .fill{display:block;height:100%;border-radius:3px}
+  .bar .val{text-align:right;color:var(--dim)}
+  .kvline{margin:3px 0;color:var(--dim)} .kvline b{color:var(--text)}
+  .ratio{display:flex;height:14px;border-radius:4px;overflow:hidden;margin:6px 0 4px;border:1px solid var(--border2)}
+  .ratio div{height:100%}
+
+  /* recommended actions */
+  .action{display:grid;grid-template-columns:190px 230px 1fr;gap:14px;align-items:baseline;
+    padding:7px 4px;border-bottom:1px solid var(--border)}
+  .action:last-child{border-bottom:none}
+  .action .who{font-weight:650}
+  .action .dir{font-size:11px;font-weight:650;padding:2px 8px;border-radius:4px;margin-right:8px}
+  .action .dir.down{background:#123528;color:#34d399}
+  .action .dir.up{background:#41231f;color:#fca5a5}
+  .action .money{color:var(--dim)}
+  .action .money b{color:var(--text)}
+  .action .save{font-weight:700}
+  .action .save.pos{color:var(--green)} .action .save.neg{color:var(--red)}
+  .action .why{color:var(--faint);font-size:12px}
+  .noactions{color:var(--faint);padding:6px 4px}
+
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  ul.plain{margin:4px 0;padding-left:18px;color:var(--dim)}
+  ul.plain li{margin:2px 0}
+  .empty{color:var(--faint);text-align:center;padding:30px 0}
+  #tableWrap{overflow-x:auto}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Seat Tier Analyzer</h1>
+    <span class="sub">Anthropic admin exports &middot; overage vs seat-tier optimizer</span>
+    <span class="spacer"></span>
+    <span class="pill">window: <b id="winLabel" class="mono">—</b></span>
+    <span class="pill">months: <b id="monthsLabel" class="mono">—</b></span>
+  </header>
+
+  <div class="drops">
+    <div class="drop" id="dropSpend">
+      <div class="dtitle">Spend report CSV</div>
+      <div class="dmeta" id="metaSpend">Drop or click — spend-report-&lt;org&gt;-YYYY-MM-DD-to-YYYY-MM-DD.csv</div>
+      <div class="dsource">Get it: <a href="https://claude.ai/analytics/overview" target="_blank" rel="noopener" onclick="event.stopPropagation()">claude.ai/analytics/overview</a> → “How much is Claude costing?” → <b>Export spend report</b></div>
+      <input type="file" id="fileSpend" accept=".csv,text/csv">
+    </div>
+    <div class="drop" id="dropMembers">
+      <div class="dtitle">Member list CSV</div>
+      <div class="dmeta" id="metaMembers">Drop or click — members-&lt;org&gt;-YYYY-MM-DD.csv ("Name","Email","Role","Status","Seat Tier")</div>
+      <div class="dsource">Get it: <a href="https://claude.ai/admin-settings/members" target="_blank" rel="noopener" onclick="event.stopPropagation()">claude.ai/admin-settings/members</a> → <b>Export CSV</b></div>
+      <input type="file" id="fileMembers" accept=".csv,text/csv">
+    </div>
+  </div>
+
+  <div class="panel settings">
+    <span>
+      <label>Window</label>
+      <input type="date" id="dateStart"> <span class="dimtxt">→</span> <input type="date" id="dateEnd">
+      <span class="dimtxt" style="margin-left:6px">(auto-parsed from filename; edit if needed)</span>
+    </span>
+    <span>
+      <label>Upgrade safety factor</label>
+      <input type="range" id="safety" min="0.1" max="1.5" step="0.05" value="0.8">
+      <b id="safetyLabel" class="mono">0.80</b>
+      <span class="dimtxt">→ suggest premium when monthly overage ≥ $<span id="threshLabel" class="mono">80</span></span>
+      <span class="dimtxt" id="safetyFeedback"></span>
+    </span>
+  </div>
+
+  <div class="note"><b>Read the spend column correctly:</b> <code>total_net_spend_usd</code> is <b>overage</b> — extra usage credits billed at API rates <i>after</i> a user exhausts their seat's included limits. $0 with millions of tokens means the seat covered everything. <b>Ambiguity:</b> $0 overage means <i>within limits</i> — or that the user was <i>rate-limited/blocked</i> and could not overspend; token volume is the usage signal, spend is only the exceeded-limits signal.</div>
+
+  <div id="results" style="display:none">
+    <div class="cards">
+      <div class="card"><div class="k">Members</div><div class="v mono" id="cMembers">—</div><div class="s" id="cMembersSub"></div></div>
+      <div class="card violet"><div class="k">Premium seats</div><div class="v mono" id="cPremium">—</div><div class="s" id="cPremiumSub"></div></div>
+      <div class="card"><div class="k">Monthly seat cost</div><div class="v mono" id="cSeatCost">—</div><div class="s">premium $125 · standard $25</div></div>
+      <div class="card amber"><div class="k">Monthly overage</div><div class="v mono" id="cOverage">—</div><div class="s" id="cOverageSub"></div></div>
+      <div class="card green"><div class="k">Downgrade candidates</div><div class="v mono" id="cDown">—</div><div class="s">premium, $0 overage, below benchmark</div></div>
+      <div class="card red"><div class="k">Upgrade candidates</div><div class="v mono" id="cUp">—</div><div class="s" id="cUpSub">standard, overage ≥ threshold</div></div>
+      <div class="card green"><div class="k">Potential savings</div><div class="v mono" id="cSavings">—</div><div class="s" id="cSavingsSub">peer-adjusted, net of projected overage</div></div>
+    </div>
+
+    <div class="panel" id="actionsBox">
+      <h2 id="actionsTitle">Recommended actions</h2>
+      <div id="actions"></div>
+    </div>
+
+    <div class="panel" id="chartBox">
+      <h2>Users by estimated API value (sqrt scale) — benchmark = heaviest $0-overage standard user</h2>
+      <div id="chart"></div>
+      <div class="legend">
+        <span><span class="sw" style="background:var(--violet)"></span>Premium</span>
+        <span><span class="sw" style="background:var(--blue)"></span>Standard</span>
+        <span><span class="sw" style="background:var(--green)"></span>Downgrade candidate</span>
+        <span><span class="sw" style="background:transparent;border-top:2px dashed var(--amber);height:0;width:18px;margin-top:5px"></span>Benchmark <span id="benchLabel" class="mono"></span></span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="filters">
+        <h2 style="margin:0">Members</h2>
+        <select id="fVerdict"><option value="">All verdicts</option></select>
+        <select id="fTier"><option value="">All tiers</option><option>Premium</option><option>Standard</option></select>
+        <input type="search" id="fSearch" placeholder="Search email / name…">
+        <span class="count" id="fCount"></span>
+        <span class="spacer"></span>
+        <span class="dimtxt">click a row for per-product / per-model detail</span>
+      </div>
+      <div id="tableWrap">
+      <table id="tbl">
+        <thead><tr>
+          <th data-k="name">Name</th>
+          <th data-k="email">Email</th>
+          <th data-k="tier">Tier</th>
+          <th data-k="costNow" class="num">Cost /mo</th>
+          <th data-k="monthlyOverage" class="num">Overage /mo</th>
+          <th data-k="tokens" class="num">Tokens</th>
+          <th data-k="estValue" class="num">Est. API value</th>
+          <th data-k="requests" class="num">Requests</th>
+          <th data-k="topProduct">Top product</th>
+          <th data-k="verdict">Verdict</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Join diagnostics</h2>
+      <div class="split">
+        <div>
+          <b>Members with no spend rows</b> <span class="dimtxt">(never used, or usage under a different email)</span>
+          <ul class="plain" id="unmatchedMembers"></ul>
+        </div>
+        <div>
+          <b>Spend emails not in member list</b> <span class="dimtxt">(departed users, service rows)</span>
+          <ul class="plain" id="unmatchedSpend"></ul>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="empty" id="emptyMsg">Load both CSVs to analyze.</div>
+</div>
+
+<script id="core">
+/* ============ pure, DOM-free core (also exercised headlessly by the test harness) ============ */
+'use strict';
+
+// RFC-4180-ish CSV parser: quoted fields, escaped quotes, CR/LF
+function parseCSV(text){
+  const rows=[]; let row=[], field='', inQ=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(inQ){
+      if(c==='"'){ if(text[i+1]==='"'){field+='"';i++;} else inQ=false; }
+      else field+=c;
+    }else if(c==='"') inQ=true;
+    else if(c===','){ row.push(field); field=''; }
+    else if(c==='\n'||c==='\r'){
+      if(c==='\r'&&text[i+1]==='\n') i++;
+      row.push(field); field='';
+      if(row.length>1||row[0]!=='') rows.push(row);
+      row=[];
+    }
+    else field+=c;
+  }
+  row.push(field);
+  if(row.length>1||row[0]!=='') rows.push(row);
+  if(!rows.length) return [];
+  const head=rows[0].map(h=>h.trim());
+  return rows.slice(1).map(r=>{ const o={}; head.forEach((h,i)=>o[h]=(r[i]??'').trim()); return o; });
+}
+
+function parseWindowFromFilename(name){
+  const m=/(\d{4}-\d{2}-\d{2})-to-(\d{4}-\d{2}-\d{2})/.exec(name||'');
+  return m?{start:m[1],end:m[2]}:null;
+}
+function monthsBetween(start,end){
+  const ms=Date.parse(end)-Date.parse(start);
+  if(!isFinite(ms)||ms<=0) return null;
+  return ms/86400000/30.4375;
+}
+
+// Published API prices per MTok (platform.claude.com pricing, Aug 2026).
+// Cache reads = 10% of input; cache writes = 1.25x (5m) / 2x (1h) of input.
+const PRICES=[
+  {match:'fable-5', label:'Fable 5',      input:10, output:50},
+  {match:'opus-5',  label:'Opus 5',       input:5,  output:25},
+  {match:'opus-4',  label:'Opus 4.x',     input:5,  output:25},
+  {match:'sonnet-5',label:'Sonnet 5',     input:2,  output:10},
+  {match:'sonnet-4',label:'Sonnet 4.x',   input:3,  output:15},
+  {match:'haiku',   label:'Haiku 4.5',    input:1,  output:5},
+].map(p=>({...p, cacheRead:p.input*0.1, write5m:p.input*1.25, write1h:p.input*2}));
+
+function priceFor(model){ return PRICES.find(p=>model.includes(p.match))||null; }
+
+function rowApiValue(r){
+  const model=(r.model||'').trim();
+  if(!model) return {value:0, unknown:false};
+  const p=priceFor(model);
+  if(!p) return {value:0, unknown:true};
+  const n=k=>Number(r[k]||0);
+  const v=( n('total_uncached_input_tokens')*p.input
+          + n('total_cache_read_tokens')*p.cacheRead
+          + n('total_cache_write_5m_tokens')*p.write5m
+          + n('total_cache_write_1h_tokens')*p.write1h
+          + n('total_completion_tokens')*p.output )/1e6;
+  return {value:v, unknown:false};
+}
+
+const SEAT_PRICE={Premium:125, Standard:25};
+const VERDICTS={
+  KEEP:'Keep premium',
+  HEAVY:'Premium OK (heavy)',
+  DOWN:'Downgrade candidate',
+  UP:'Consider premium',
+  OK_OVER:'Standard OK — overage is cheap',
+  WITHIN:'Within limits ($0)',
+};
+
+function analyze(spendRows, memberRows, opts){
+  const months=Math.max(opts.months||1, 0.01);
+  const safety=opts.safety==null?0.8:opts.safety;
+
+  // aggregate spend per lowercased email
+  const agg=new Map();
+  const getA=e=>{ let a=agg.get(e); if(!a){a={overage:0,gross:0,tokens:0,requests:0,estValue:0,
+    uncached:0,cacheRead:0,write5m:0,write1h:0,overageRows:0,zeroRows:0,unknownModels:new Set(),
+    products:new Map(),models:new Map()}; agg.set(e,a);} return a; };
+  const num=(r,k)=>Number(r[k]||0);
+
+  for(const r of spendRows){
+    const email=(r.user_email||'').trim().toLowerCase();
+    if(!email) continue;
+    const a=getA(email);
+    const spend=num(r,'total_net_spend_usd');
+    const tok=num(r,'total_prompt_tokens')+num(r,'total_completion_tokens');
+    const {value,unknown}=rowApiValue(r);
+    if(unknown) a.unknownModels.add(r.model);
+    a.overage+=spend; a.gross+=num(r,'total_gross_spend_usd');
+    a.tokens+=tok; a.requests+=num(r,'total_requests'); a.estValue+=value;
+    a.uncached+=num(r,'total_uncached_input_tokens'); a.cacheRead+=num(r,'total_cache_read_tokens');
+    a.write5m+=num(r,'total_cache_write_5m_tokens'); a.write1h+=num(r,'total_cache_write_1h_tokens');
+    if(spend>0) a.overageRows++; else a.zeroRows++;
+    const prod=(r.product||'(unknown)').trim()||'(unknown)';
+    const model=(r.model||'(none)').trim()||'(none)';
+    const bump=(map,key)=>{ const e=map.get(key)||{tokens:0,estValue:0,overage:0,requests:0};
+      e.tokens+=tok; e.estValue+=value; e.overage+=spend; e.requests+=num(r,'total_requests'); map.set(key,e); };
+    bump(a.products,prod); bump(a.models,model);
+  }
+
+  // members
+  const users=[];
+  const memberEmails=new Set();
+  for(const m of memberRows){
+    const email=(m.Email||'').trim().toLowerCase();
+    if(!email) continue;
+    memberEmails.add(email);
+    const a=agg.get(email);
+    users.push({
+      name:m.Name||'', email, role:m.Role||'', status:m.Status||'',
+      tier:(m['Seat Tier']||'').trim(),
+      hasSpend:!!a,
+      overage:a?a.overage:0, monthlyOverage:(a?a.overage:0)/months,
+      tokens:a?a.tokens:0, requests:a?a.requests:0, estValue:a?a.estValue:0,
+      monthlyEstValue:(a?a.estValue:0)/months,
+      uncached:a?a.uncached:0, cacheRead:a?a.cacheRead:0,
+      write5m:a?a.write5m:0, write1h:a?a.write1h:0,
+      overageRows:a?a.overageRows:0, zeroRows:a?a.zeroRows:0,
+      unknownModels:a?[...a.unknownModels]:[],
+      products:a?[...a.products.entries()].sort((x,y)=>y[1].tokens-x[1].tokens):[],
+      models:a?[...a.models.entries()].sort((x,y)=>y[1].tokens-x[1].tokens):[],
+    });
+  }
+  for(const u of users) u.topProduct=u.products.length?u.products[0][0]:'—';
+
+  // benchmark: highest-token-volume STANDARD user with $0 overage
+  let benchmark=null;
+  for(const u of users)
+    if(u.tier==='Standard'&&u.overage===0&&(!benchmark||u.tokens>benchmark.tokens)) benchmark=u;
+
+  const upgradeThreshold=100*safety;
+  for(const u of users){
+    if(u.tier==='Premium'){
+      if(u.overage>0) u.verdict=VERDICTS.KEEP;
+      else if(benchmark && u.tokens>=benchmark.tokens && u.estValue>=benchmark.estValue) u.verdict=VERDICTS.HEAVY;
+      else u.verdict=VERDICTS.DOWN;
+    }else{
+      if(u.monthlyOverage>=upgradeThreshold) u.verdict=VERDICTS.UP;
+      else if(u.overage>0) u.verdict=VERDICTS.OK_OVER;
+      else u.verdict=VERDICTS.WITHIN;
+    }
+  }
+
+  // Peer-based cost projection: seat limits are burst rate-limits, not aggregate
+  // token buckets, so no absolute token cutoff exists. The best predictor of what a
+  // premium user would pay on a standard seat is what standard users with a similar
+  // usage footprint (½–2× est. API value) actually pay in monthly overage.
+  function peerEstimate(u){
+    const peers=users.filter(p=>p!==u&&p.tier==='Standard'&&p.hasSpend
+      &&p.estValue>=u.estValue/2&&p.estValue<=u.estValue*2);
+    if(!peers.length) return null;
+    const ov=peers.map(p=>p.monthlyOverage).sort((a,b)=>a-b);
+    const mid=ov.length>>1;
+    const median=ov.length%2?ov[mid]:(ov[mid-1]+ov[mid])/2;
+    return {count:ov.length,min:ov[0],max:ov[ov.length-1],median,
+            emails:peers.map(p=>p.email)};
+  }
+  for(const u of users){
+    u.costNow=(SEAT_PRICE[u.tier]||0)+u.monthlyOverage;
+    u.peer=null; u.projectedMonthly=null; u.switchSavings=null;
+    if(u.verdict===VERDICTS.DOWN){
+      u.peer=peerEstimate(u);
+      u.projectedMonthly=SEAT_PRICE.Standard+(u.peer?u.peer.median:0);
+      u.switchSavings=u.costNow-u.projectedMonthly;
+    }else if(u.verdict===VERDICTS.UP){
+      // premium's 5x included allowance is assumed to absorb the standard overage
+      u.projectedMonthly=SEAT_PRICE.Premium;
+      u.switchSavings=u.costNow-u.projectedMonthly;
+    }
+  }
+
+  const unmatchedMembers=users.filter(u=>!u.hasSpend).map(u=>u.email);
+  const unmatchedSpend=[...agg.keys()].filter(e=>!memberEmails.has(e))
+    .map(e=>({email:e, overage:agg.get(e).overage, tokens:agg.get(e).tokens}));
+
+  const downgrades=users.filter(u=>u.verdict===VERDICTS.DOWN);
+  const totals={
+    members:users.length,
+    premium:users.filter(u=>u.tier==='Premium').length,
+    standard:users.filter(u=>u.tier==='Standard').length,
+    seatCost:users.reduce((s,u)=>s+(SEAT_PRICE[u.tier]||0),0),
+    monthlyOverage:users.reduce((s,u)=>s+u.overage,0)/months,
+    totalOverage:users.reduce((s,u)=>s+u.overage,0),
+    downgrades:downgrades.length,
+    upgrades:users.filter(u=>u.verdict===VERDICTS.UP).length,
+    savings:downgrades.length*(SEAT_PRICE.Premium-SEAT_PRICE.Standard),
+    netSavings:users.reduce((s,u)=>s+(u.switchSavings||0),0),
+    upgradeThreshold,
+  };
+  return {users, benchmark, totals, unmatchedMembers, unmatchedSpend, months, safety};
+}
+
+// humane formatting
+function fmtNum(n){
+  n=Number(n)||0; const a=Math.abs(n);
+  if(a>=1e9) return (n/1e9).toFixed(a>=1e10?0:1)+'B';
+  if(a>=1e6) return (n/1e6).toFixed(a>=1e7?0:1)+'M';
+  if(a>=1e3) return (n/1e3).toFixed(a>=1e4?0:1)+'K';
+  return String(Math.round(n));
+}
+function fmtUSD(n){
+  n=Number(n)||0;
+  return '$'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function fmtPct(x){ return (x*100).toFixed(1)+'%'; }
+
+if(typeof module!=='undefined'&&module.exports)
+  module.exports={parseCSV,parseWindowFromFilename,monthsBetween,analyze,priceFor,rowApiValue,PRICES,VERDICTS,SEAT_PRICE,fmtNum,fmtUSD};
+</script>
+
+<script>
+/* ============ UI layer ============ */
+'use strict';
+(function(){
+  const $=id=>document.getElementById(id);
+  const state={ spendText:null, spendName:null, membersText:null, membersName:null,
+                result:null, sortKey:'estValue', sortDir:-1, expanded:new Set() };
+
+  // ----- settings persistence -----
+  const LS='seatAnalyzer.settings.v1';
+  function loadSettings(){
+    try{ return JSON.parse(localStorage.getItem(LS))||{}; }catch(e){ return {}; }
+  }
+  function saveSettings(){
+    try{ localStorage.setItem(LS, JSON.stringify({
+      safety:+$('safety').value, start:$('dateStart').value, end:$('dateEnd').value
+    })); }catch(e){}
+  }
+  const saved=loadSettings();
+  if(saved.safety) $('safety').value=saved.safety;
+  if(saved.start) $('dateStart').value=saved.start;
+  if(saved.end) $('dateEnd').value=saved.end;
+
+  // ----- file loading -----
+  function routeFile(file, preferredKind){
+    const rd=new FileReader();
+    rd.onload=()=>{
+      const text=String(rd.result);
+      const head=text.slice(0,400).toLowerCase();
+      let kind=preferredKind;
+      if(head.includes('user_email')) kind='spend';
+      else if(head.includes('seat tier')) kind='members';
+      if(kind==='spend'){
+        state.spendText=text; state.spendName=file.name;
+        $('metaSpend').innerHTML=`<span class="badge-ok">✓</span> ${file.name} — ${fmtNum(text.split('\n').length-1)} rows`;
+        $('dropSpend').classList.add('loaded');
+        const w=parseWindowFromFilename(file.name);
+        if(w){ $('dateStart').value=w.start; $('dateEnd').value=w.end; saveSettings(); }
+      }else if(kind==='members'){
+        state.membersText=text; state.membersName=file.name;
+        $('metaMembers').innerHTML=`<span class="badge-ok">✓</span> ${file.name}`;
+        $('dropMembers').classList.add('loaded');
+      }
+      recompute();
+    };
+    rd.readAsText(file);
+  }
+  function wireDrop(zoneId, inputId, kind){
+    const z=$(zoneId), inp=$(inputId);
+    z.addEventListener('click',()=>inp.click());
+    inp.addEventListener('change',()=>{ for(const f of inp.files) routeFile(f,kind); inp.value=''; });
+    z.addEventListener('dragover',e=>{e.preventDefault();z.classList.add('over');});
+    z.addEventListener('dragleave',()=>z.classList.remove('over'));
+    z.addEventListener('drop',e=>{
+      e.preventDefault(); z.classList.remove('over');
+      for(const f of e.dataTransfer.files) routeFile(f,kind);
+    });
+  }
+  wireDrop('dropSpend','fileSpend','spend');
+  wireDrop('dropMembers','fileMembers','members');
+
+  // ----- settings events -----
+  $('safety').addEventListener('input',()=>{ saveSettings(); recompute(); });
+  $('dateStart').addEventListener('change',()=>{ saveSettings(); recompute(); });
+  $('dateEnd').addEventListener('change',()=>{ saveSettings(); recompute(); });
+  $('fVerdict').addEventListener('change',renderTable);
+  $('fTier').addEventListener('change',renderTable);
+  $('fSearch').addEventListener('input',renderTable);
+
+  // ----- compute -----
+  function recompute(){
+    const safety=+$('safety').value;
+    $('safetyLabel').textContent=safety.toFixed(2);
+    $('threshLabel').textContent=Math.round(100*safety);
+    const start=$('dateStart').value, end=$('dateEnd').value;
+    const months=monthsBetween(start,end);
+    $('winLabel').textContent=(start&&end)?`${start} → ${end}`:'—';
+    $('monthsLabel').textContent=months?months.toFixed(2):'—';
+
+    if(!state.spendText||!state.membersText){ return; }
+    if(!months){ $('emptyMsg').textContent='Set a valid date window (start < end) to analyze.'; return; }
+
+    const spendRows=parseCSV(state.spendText);
+    const memberRows=parseCSV(state.membersText);
+    state.result=analyze(spendRows,memberRows,{months,safety});
+    window.__seatResult=state.result; // exposed for headless verification
+    render();
+  }
+
+  // ----- render -----
+  function render(){
+    const R=state.result; if(!R) return;
+    $('results').style.display=''; $('emptyMsg').style.display='none';
+    const T=R.totals;
+    $('cMembers').textContent=T.members;
+    $('cMembersSub').textContent=`${T.premium} premium · ${T.standard} standard`;
+    $('cPremium').textContent=T.premium;
+    $('cPremiumSub').textContent=fmtUSD(T.premium*SEAT_PRICE.Premium)+' /mo';
+    $('cSeatCost').textContent=fmtUSD(T.seatCost);
+    $('cOverage').textContent=fmtUSD(T.monthlyOverage);
+    $('cOverageSub').textContent=fmtUSD(T.totalOverage)+' total in window';
+    $('cDown').textContent=T.downgrades;
+    $('cUp').textContent=T.upgrades;
+    $('cUpSub').textContent=`standard, overage ≥ ${fmtUSD(T.upgradeThreshold)}/mo`;
+    $('cSavings').textContent=fmtUSD(T.netSavings)+'/mo';
+    $('cSavingsSub').textContent=`peer-adjusted (naive seat delta: ${fmtUSD(T.savings)}/mo)`;
+    renderActions();
+    $('benchLabel').textContent=R.benchmark?`${R.benchmark.email} · ${fmtNum(R.benchmark.tokens)} tok · ${fmtUSD(R.benchmark.estValue)}`:'(none)';
+
+    // live slider feedback: what does the current threshold actually catch?
+    const ups=R.users.filter(u=>u.verdict===VERDICTS.UP);
+    const topStd=R.users.filter(u=>u.tier==='Standard'&&u.verdict!==VERDICTS.UP)
+      .reduce((a,u)=>(!a||u.monthlyOverage>a.monthlyOverage)?u:a,null);
+    let fb='';
+    if(ups.length) fb=`— ${ups.length} upgrade candidate${ups.length>1?'s':''}: ${ups.map(u=>u.email.split('@')[0]).join(', ')}`;
+    else if(topStd&&topStd.monthlyOverage>0){
+      const flipAt=Math.floor(topStd.monthlyOverage/100/0.05)*0.05; // slider value at which topStd qualifies
+      fb=`— none qualify; highest standard overage is ${topStd.email} at ${fmtUSD(topStd.monthlyOverage)}/mo`
+        +(flipAt>=0.1?` (drag to ≤ ${flipAt.toFixed(2)} to flag them)`:' (below the slider range)');
+    }
+    $('safetyFeedback').textContent=fb;
+
+    // flash rows whose verdict changed since the previous analysis (slider / date edits)
+    const changed=new Set();
+    if(state.prevVerdicts) for(const u of R.users)
+      if(state.prevVerdicts.get(u.email)&&state.prevVerdicts.get(u.email)!==u.verdict) changed.add(u.email);
+    state.prevVerdicts=new Map(R.users.map(u=>[u.email,u.verdict]));
+    state.changedEmails=changed;
+
+    // verdict filter options
+    const sel=$('fVerdict'); const cur=sel.value;
+    const verdicts=[...new Set(R.users.map(u=>u.verdict))];
+    sel.innerHTML='<option value="">All verdicts</option>'+verdicts.map(v=>`<option${v===cur?' selected':''}>${v}</option>`).join('');
+
+    renderChart(); renderTable(); renderUnmatched();
+  }
+
+  function verdictClass(v){
+    return {[VERDICTS.KEEP]:'v-keep',[VERDICTS.HEAVY]:'v-heavy',[VERDICTS.DOWN]:'v-down',
+            [VERDICTS.UP]:'v-upgrade',[VERDICTS.OK_OVER]:'v-okover',[VERDICTS.WITHIN]:'v-within'}[v]||'v-within';
+  }
+
+  function renderActions(){
+    const R=state.result;
+    const acts=R.users.filter(u=>u.switchSavings!=null)
+      .sort((a,b)=>b.switchSavings-a.switchSavings);
+    $('actionsTitle').textContent=acts.length
+      ? `Recommended actions — net ${fmtUSD(R.totals.netSavings)}/mo`
+      : 'Recommended actions';
+    if(!acts.length){
+      $('actions').innerHTML='<div class="noactions">No seat changes recommended — the current mix is the cheapest option at this threshold. Lower the safety factor to see earlier upgrade triggers.</div>';
+      return;
+    }
+    $('actions').innerHTML=acts.map(u=>{
+      const down=u.verdict===VERDICTS.DOWN;
+      const why=down
+        ? (u.peer
+            ? `${u.peer.count} standard users with similar usage (½–2× est. value) pay ${fmtUSD(u.peer.min)}–${fmtUSD(u.peer.max)}/mo overage (median ${fmtUSD(u.peer.median)}) — worst case still saves ${fmtUSD(125-25-u.peer.max)}/mo`
+            : 'no standard peers with similar usage — projection assumes $0 overage')
+        : `pays ${fmtUSD(u.monthlyOverage)}/mo overage on standard; premium's 5× allowance should absorb it`;
+      const cls=u.switchSavings>=0?'pos':'neg';
+      const sign=u.switchSavings>=0?'saves ':'costs ';
+      return `<div class="action">
+        <span class="who"><span class="dir ${down?'down':'up'}">${down?'▼ downgrade':'▲ upgrade'}</span>${esc(u.email.split('@')[0])}</span>
+        <span class="money mono">${fmtUSD(u.costNow)} → <b>${fmtUSD(u.projectedMonthly)}</b>/mo
+          <span class="save ${cls}">${sign}${fmtUSD(Math.abs(u.switchSavings))}</span></span>
+        <span class="why">${why}</span>
+      </div>`;
+    }).join('');
+  }
+
+  function renderChart(){
+    const R=state.result;
+    const users=[...R.users].sort((a,b)=>b.estValue-a.estValue);
+    const W=Math.max(700, users.length*24), H=240, pad={l:56,r:8,t:10,b:64};
+    const maxV=Math.max(...users.map(u=>u.estValue),1);
+    const sq=v=>Math.sqrt(Math.max(v,0)), maxS=sq(maxV);
+    const y=v=>pad.t+(H-pad.t-pad.b)*(1-sq(v)/maxS);
+    const bw=(W-pad.l-pad.r)/users.length;
+    let s=`<svg viewBox="0 0 ${W} ${H+10}" preserveAspectRatio="none" style="min-width:${Math.min(W,1360)}px">`;
+    // gridlines at nice values
+    for(const gv of [10,100,500,1000,2000,4000]){
+      if(gv>maxV*1.05) continue;
+      s+=`<line x1="${pad.l}" x2="${W-pad.r}" y1="${y(gv)}" y2="${y(gv)}" stroke="#242c3a" stroke-width="1"/>
+          <text x="${pad.l-6}" y="${y(gv)+4}" fill="#5c6879" font-size="10" text-anchor="end">$${gv>=1000?(gv/1000)+'K':gv}</text>`;
+    }
+    users.forEach((u,i)=>{
+      const x=pad.l+i*bw;
+      const col=u.verdict===VERDICTS.DOWN?'#34d399':(u.tier==='Premium'?'#a78bfa':'#4c9aff');
+      const h=(H-pad.b)-y(u.estValue);
+      s+=`<rect x="${x+1.5}" y="${y(u.estValue)}" width="${Math.max(bw-3,2)}" height="${Math.max(h,1)}" rx="2" fill="${col}" fill-opacity="0.9">
+            <title>${u.email}
+tier: ${u.tier}  ·  verdict: ${u.verdict}
+est. API value: ${fmtUSD(u.estValue)}  ·  tokens: ${fmtNum(u.tokens)}
+overage: ${fmtUSD(u.overage)} (${fmtUSD(u.monthlyOverage)}/mo)</title></rect>`;
+      const label=u.email.split('@')[0];
+      s+=`<text x="${x+bw/2}" y="${H-pad.b+8}" fill="#69758a" font-size="9" text-anchor="end" transform="rotate(-55 ${x+bw/2} ${H-pad.b+8})">${label}</text>`;
+    });
+    if(R.benchmark){
+      const by=y(R.benchmark.estValue);
+      s+=`<line x1="${pad.l}" x2="${W-pad.r}" y1="${by}" y2="${by}" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="6 4"/>
+          <text x="${W-pad.r-4}" y="${by-5}" fill="#fbbf24" font-size="10" text-anchor="end">benchmark ${fmtUSD(R.benchmark.estValue)}</text>`;
+    }
+    s+='</svg>';
+    $('chart').innerHTML=s;
+  }
+
+  function renderTable(){
+    const R=state.result; if(!R) return;
+    const fv=$('fVerdict').value, ft=$('fTier').value, fs=$('fSearch').value.trim().toLowerCase();
+    let rows=R.users.filter(u=>
+      (!fv||u.verdict===fv)&&(!ft||u.tier===ft)&&
+      (!fs||u.email.includes(fs)||u.name.toLowerCase().includes(fs)));
+    const k=state.sortKey, d=state.sortDir;
+    rows.sort((a,b)=>{
+      const av=a[k],bv=b[k];
+      if(typeof av==='number'&&typeof bv==='number') return (av-bv)*d;
+      return String(av).localeCompare(String(bv))*d;
+    });
+    $('fCount').textContent=`${rows.length} of ${R.users.length}`;
+    const tb=$('tbody');
+    tb.innerHTML=rows.map(u=>{
+      const exp=state.expanded.has(u.email);
+      const flash=state.changedEmails&&state.changedEmails.has(u.email)?' changed':'';
+      return `<tr class="row${flash}" data-email="${u.email}">
+        <td>${esc(u.name)}</td>
+        <td class="mono">${esc(u.email)}</td>
+        <td><span class="tier ${u.tier}">${u.tier}</span></td>
+        <td class="num mono">${fmtUSD(u.costNow)}</td>
+        <td class="num mono">${u.overage>0?fmtUSD(u.monthlyOverage):'<span class="dimtxt">$0.00</span>'}</td>
+        <td class="num mono">${u.tokens?fmtNum(u.tokens):'<span class="dimtxt">—</span>'}</td>
+        <td class="num mono">${u.estValue?fmtUSD(u.estValue):'<span class="dimtxt">—</span>'}</td>
+        <td class="num mono">${u.requests?fmtNum(u.requests):'<span class="dimtxt">—</span>'}</td>
+        <td>${esc(u.topProduct)}</td>
+        <td><span class="verdict ${verdictClass(u.verdict)}">${u.verdict}</span></td>
+      </tr>`+(exp?detailRow(u):'');
+    }).join('');
+    state.changedEmails=null; // flash once per analysis, not on every sort/filter re-render
+    // sort indicators
+    document.querySelectorAll('#tbl thead th').forEach(th=>{
+      const arr=th.dataset.k===state.sortKey?(state.sortDir<0?' ▼':' ▲'):'';
+      th.innerHTML=th.textContent.replace(/ [▼▲]$/,'')+(arr?`<span class="arr">${arr}</span>`:'');
+    });
+  }
+
+  function detailRow(u){
+    const bar=(label,frac,val,color)=>`<div class="bar"><span class="lbl" title="${esc(label)}">${esc(label)}</span>
+      <span class="track"><span class="fill" style="width:${Math.max(frac*100,1)}%;background:${color}"></span></span>
+      <span class="val mono">${val}</span></div>`;
+    const maxPT=Math.max(...u.products.map(p=>p[1].tokens),1);
+    const maxMT=Math.max(...u.models.map(m=>m[1].tokens),1);
+    const prodBars=u.products.map(([p,d])=>bar(p,d.tokens/maxPT,`${fmtNum(d.tokens)} · ${fmtUSD(d.estValue)}${d.overage>0?` · <span style="color:var(--amber)">${fmtUSD(d.overage)} ovg</span>`:''}`,'#4c9aff')).join('')||'<span class="dimtxt">no usage</span>';
+    const modelBars=u.models.map(([m,d])=>bar(m,d.tokens/maxMT,`${fmtNum(d.tokens)} · ${fmtUSD(d.estValue)}`,'#a78bfa')).join('')||'<span class="dimtxt">no usage</span>';
+    const inputTotal=u.uncached+u.cacheRead+u.write5m+u.write1h;
+    const pc=x=>inputTotal?x/inputTotal:0;
+    const ratio=inputTotal?`
+      <div class="ratio">
+        <div style="width:${pc(u.cacheRead)*100}%;background:#22d3ee" title="cache read ${fmtNum(u.cacheRead)}"></div>
+        <div style="width:${pc(u.uncached)*100}%;background:#f87171" title="uncached ${fmtNum(u.uncached)}"></div>
+        <div style="width:${pc(u.write5m)*100}%;background:#fbbf24" title="cache write 5m ${fmtNum(u.write5m)}"></div>
+        <div style="width:${pc(u.write1h)*100}%;background:#a78bfa" title="cache write 1h ${fmtNum(u.write1h)}"></div>
+      </div>
+      <div class="kvline"><span style="color:#22d3ee">■</span> cache read ${fmtPct(pc(u.cacheRead))} · <span style="color:#f87171">■</span> uncached ${fmtPct(pc(u.uncached))} · <span style="color:#fbbf24">■</span> write 5m ${fmtPct(pc(u.write5m))} · <span style="color:#a78bfa">■</span> write 1h ${fmtPct(pc(u.write1h))}</div>`
+      :'<span class="dimtxt">no input tokens</span>';
+    return `<tr class="detail"><td colspan="10"><div class="dgrid">
+      <div><h2>By product (tokens)</h2>${prodBars}</div>
+      <div><h2>By model (tokens)</h2>${modelBars}</div>
+      <div>
+        <h2>Input mix &amp; billing rows</h2>
+        ${ratio}
+        <div class="kvline">rows with overage &gt; $0: <b>${u.overageRows}</b> · rows at $0: <b>${u.zeroRows}</b></div>
+        <div class="kvline">total overage in window: <b>${fmtUSD(u.overage)}</b> (${fmtUSD(u.monthlyOverage)}/mo)</div>
+        <div class="kvline">est. API value: <b>${fmtUSD(u.estValue)}</b> (${fmtUSD(u.monthlyEstValue)}/mo)</div>
+        <div class="kvline">seat: <b>${u.tier}</b> ${fmtUSD(SEAT_PRICE[u.tier]||0)}/mo · all-in cost: <b>${fmtUSD(u.costNow)}/mo</b> · role: ${esc(u.role)} · status: ${esc(u.status)}</div>
+        ${u.projectedMonthly!=null?`<div class="kvline">projected on ${u.tier==='Premium'?'Standard':'Premium'}: <b>${fmtUSD(u.projectedMonthly)}/mo</b> → <b style="color:${u.switchSavings>=0?'var(--green)':'var(--red)'}">${u.switchSavings>=0?'saves':'costs'} ${fmtUSD(Math.abs(u.switchSavings))}/mo</b></div>`:''}
+        ${u.peer?`<div class="kvline">peer evidence: <b>${u.peer.count}</b> standard users at ½–2× est. value pay <b>${fmtUSD(u.peer.min)}–${fmtUSD(u.peer.max)}/mo</b> overage (median ${fmtUSD(u.peer.median)}): <span class="mono">${u.peer.emails.map(e=>esc(e.split('@')[0])).join(', ')}</span></div>`:''}
+        ${u.unknownModels.length?`<div class="kvline" style="color:var(--amber)">unpriced models: ${u.unknownModels.map(esc).join(', ')}</div>`:''}
+      </div>
+    </div></td></tr>`;
+  }
+
+  function renderUnmatched(){
+    const R=state.result;
+    $('unmatchedMembers').innerHTML=R.unmatchedMembers.length
+      ? R.unmatchedMembers.map(e=>`<li class="mono">${esc(e)}</li>`).join('')
+      : '<li>none — every member has spend rows</li>';
+    $('unmatchedSpend').innerHTML=R.unmatchedSpend.length
+      ? R.unmatchedSpend.map(x=>`<li class="mono">${esc(x.email)} <span class="dimtxt">— ${fmtNum(x.tokens)} tok, ${fmtUSD(x.overage)} overage${x.email.startsWith('(')?' (org-level service row, excluded from per-user analysis)':''}</span></li>`).join('')
+      : '<li>none</li>';
+  }
+
+  // table interactions
+  document.querySelector('#tbl thead').addEventListener('click',e=>{
+    const th=e.target.closest('th'); if(!th) return;
+    const k=th.dataset.k;
+    if(state.sortKey===k) state.sortDir*=-1;
+    else { state.sortKey=k; state.sortDir=(k==='name'||k==='email'||k==='tier'||k==='topProduct'||k==='verdict')?1:-1; }
+    renderTable();
+  });
+  $('tbody').addEventListener('click',e=>{
+    const tr=e.target.closest('tr.row'); if(!tr) return;
+    const email=tr.dataset.email;
+    state.expanded.has(email)?state.expanded.delete(email):state.expanded.add(email);
+    renderTable();
+  });
+
+  function esc(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+  // expose a hook so a headless driver can inject CSV text directly
+  window.__loadTexts=function(spendText,spendName,membersText){
+    state.spendText=spendText; state.spendName=spendName; state.membersText=membersText;
+    const w=parseWindowFromFilename(spendName);
+    if(w){ $('dateStart').value=w.start; $('dateEnd').value=w.end; }
+    $('dropSpend').classList.add('loaded'); $('dropMembers').classList.add('loaded');
+    recompute();
+  };
+
+  recompute();
+})();
+</script>
+</body>
+</html>
