@@ -7,10 +7,10 @@ and recommends seat-tier changes (Premium $125/mo ↔ Standard $25/mo).
 
 | File | Purpose |
 |---|---|
-| `seat-analyzer.html` | The entire app — HTML, CSS, and JS inline. No build step, no network requests. Open directly in a browser. |
+| `index.html` | The entire app — HTML, CSS, and JS inline. No build step, no network requests. Open directly in a browser. |
 | `verify.js` | Headless test harness (plain node, no deps). Extracts the app's core script and runs it against real CSV exports. |
 
-`seat-analyzer.html` has **two script blocks**:
+`index.html` has **two script blocks**:
 
 1. `<script id="core">` — **pure, DOM-free logic**: CSV parser, price table, `analyze()`,
    formatters. It exports via `module.exports` when run under node — `verify.js` depends on

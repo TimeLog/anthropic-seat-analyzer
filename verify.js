@@ -1,4 +1,4 @@
-// Headless verification of seat-analyzer.html core logic against real admin exports.
+// Headless verification of index.html core logic against real admin exports.
 // All expectations are derived from the CSVs at runtime — no emails or usage figures
 // live in this file. Exact verdict lists can optionally be pinned in a gitignored
 // expectations.json (generate with --write-expectations).
@@ -7,7 +7,7 @@
 //        DATA_DIR=/path node verify.js        (CSVs default to ~/Downloads)
 const fs = require('fs'), path = require('path'), cp = require('child_process');
 const dataDir = process.env.DATA_DIR || path.join(process.env.HOME, 'Downloads');
-const html = fs.readFileSync(path.join(__dirname, 'seat-analyzer.html'), 'utf8');
+const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 
 // extract the core (DOM-free) script
 const m = /<script id="core">([\s\S]*?)<\/script>/.exec(html);

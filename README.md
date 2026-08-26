@@ -18,7 +18,7 @@ filename (editable in the UI if needed).
 
 ## Use
 
-1. Open `seat-analyzer.html` in any browser (double-click — no server, no build, no
+1. Open `index.html` in any browser (double-click — no server, no build, no
    network; the CSVs are parsed locally and never leave your machine).
 2. Drop the two exports onto the drop zones (either file on either zone — they're routed
    by content).
